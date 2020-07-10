@@ -1,0 +1,254 @@
+---
+title: "Exam3"
+author: "Ronald Long"
+date: "7/9/2020"
+output:
+  pdf_document: default
+  word_document: default
+  toc: yes
+  theme: united
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+knitr::opts_chunk$set(
+  warning = TRUE, # show warnings
+  message = TRUE, # show messages
+  error = TRUE, # do not interrupt generation in case of errors,
+  echo = TRUE  # show R code
+)
+```
+# Exam 3
+
+## Question 1
+Clear the environment
+```{r}
+rm(list=ls(all=TRUE))
+```
+
+## Question 2
+Use the tidycensus package to find the inequality Gini index variable, there are multiple parts
+```{r}
+# a)
+library(tidycensus)
+library(tidyverse)
+suppressMessages(library(bit64))
+
+
+# b)
+v15 <- load_variables(year = 2015,
+                      'acs5')
+
+
+gini_2015 <- get_acs(geography = "state",
+                 variables = c(GINI = c("B19083_001")),
+                 year = 2015)
+
+v10 <- load_variables(year = 2010,
+                      'acs5')
+gini_2010 <- get_acs(geography = "state",
+                        variables = c(GINI = c("B19083_001")), year = 2010)
+inequality_panel <- bind_rows(gini_2010, gini_2015)
+
+library(data.table)
+setnames(inequality_panel, 'estimate', 'gini')
+setnames(inequality_panel, 'NAME', 'state')
+
+head(inequality_panel)
+```
+
+## Question 3
+reshape the inequality panel wide, so that gini values for 2010 and 2015 hve their own columns
+```{r}
+ inequality_wide <-
+    inequality_panel %>%
+    pivot_wider(id_cols = c("2010", "2015"), # unique IDs
+                names_from = "year", # names for new wide vars
+                values_from = "gdp_current", # data to put in new wide vars
+                names_prefix = "year" )
+
+head(inequality_wide)
+```
+
+## Question 4
+Reshape the inequality_wide to long format
+```{r}
+inequality_long <-
+    inequality_wide %>%
+    pivot_longer(cols = starts_with("year"), # use columns starting with "year"
+                 names_to ="year", # name of new column, on the basis it starts with
+                 names_prefix = "year", # part of string to drop, would carry
+                 values_to = "gdp_current", # where to put numeric values
+                 values_drop_na = FALSE) %>% # don't drop NAs
+    filter(!(current_amount==0)) # drop observations with no disb
+```
+
+## Question 5
+show the r code that inequality_panel and inequality_long have the same number of observations
+```{r}
+str(inequality_long)
+str(inequality_panel)
+```
+
+## Question 6
+collapse the inequality dataframe by state to obtain a single mean
+``` {r}
+inequality_collapse <-
+inequality_long %>%
+group_by(state) %>% # tell R the unique IDs
+summarize(across(where(is.numeric), sum)) %>% # summarize numeric vars by sum
+
+```
+
+## Question 7
+Produce a map of the United States that colors in the state polygons by their mean gini scores from inequality_collapse
+```{r}
+library(easypackages)
+packages('rio', 'tidyverse', 'googlesheets4', 'labelled', 'data.table',
+         'varhandle', 'ggrepel', 'geosphere', 'rgeos', 'viridis', 'mapview',
+         'rnaturalearth', 'rnaturalearthdata', 'devtools', 'rnaturalearthhires',
+         'raster', 'sp', 'sf', 'ggsflabel', 'Imap')
+#github
+devtools::install_github('ropensci/rnaturalearthhires')
+library(devtools)
+library(remotes)
+devtools::install_github('yutannihilation/ggsflabel')
+libraries('rio', 'tidyverse', 'googlesheets4', 'labelled', 'data.table',
+          'varhandle', 'ggrepel', 'geosphere', 'rgeos', 'viridis', 'mapview',
+          'rnaturalearth', 'rnaturalearthdata', 'devtools', 'rnaturalearthhires',
+          'raster', 'sp', 'sf', 'ggsflabel', 'Imap')
+USA_map = ggplot() +
+geom_sf(data = inequality_collapse) +
+geom_sf(data = inequality_collapse, aes(fill=`Log Value`)) +
+scale_fill_viridis(option = "viridis") +
+ggtitle("USA GINI Scores") +
+theme(plot.title = element_text(hjust = 0.5)) +
+theme_void()
+print(USA_map)
+
+```
+## Question 8
+WDI package to import data in GDP in current US dollars
+```{r}
+library(WDI)
+GDP = WDI(country = "all", indicator = c("NY.GDP.MKTP.CD"),
+start = 2006, # start of foreign aid data
+end = 2007, # end of of foreign aid data
+extra = FALSE, cache = NULL)
+library(data.table)
+setnames(GDP,"NY.GDP.MKTP.CD", "gdp_current")
+```
+
+## Question 9
+Deflate the gdp_current to constant 2010 or 2015 us dollars
+```{r}
+deflator = subset(gdp)
+subset(deflator, deflator==100)
+GDP= left_join(deflator,
+deflator,
+by=c("year"))
+deflated_data$deflated_amount = deflated_data$current_amount/
+(deflated_data$deflator/100)
+head(deflated_data)
+```
+I thought that the 2015 year would be a good baseline because it seems to be set at 100 for the deflator data.
+
+## Question 10 
+The user interface with inputs, and outputs. There is also a server that interacts with it, make sure to execute. The server allows you to render certain things.
+
+## Question 11
+pull the pdf from mike denly's webpage
+```{r}
+library(pdftools)
+library(tidyr)
+library(tidytext)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+
+armeniatext=pdf_text(pdf = 'https://pdf.usaid.gov/pdf_docs/PA00TNMG.pdf')
+
+armeniatext
+```
+## Question 12
+convert the text from the pdf file to a dataframe
+```{r}
+armeniatext=as.data.frame(armeniatext, stringsAsFactors = FALSE)
+
+```
+
+## Question 13
+tokenize data by word and then remove the stop words
+```{r}
+armeniatext=armeniatext %>%
+  unnest_tokens(word, text)
+
+data(stop_words)
+
+armeniatext <- armenia %>% 
+  anti_join(stop_words)
+```
+## Question 14
+figuring out the op 5 most used word in the report
+```{r}
+armtextfreq <- armeniatext %>%
+count(word, sort = TRUE)
+head(armtextfreq)
+```
+
+## Question 15
+load the billboard hot 100 webpage and name the list
+```{r}
+library(rvest)
+hot100page <- "https://www.billboard.com/charts/hot-100"
+hot100exam <- read_html(hot100page)
+
+hot100exam
+```
+## Question 16
+using rvest to identify all the nodes in the webpage
+``` {r}
+body_nodes <- hot100exam %>%
+html_node("body") %>%
+html_children()
+body_nodes
+
+
+```
+```{r}
+body_nodes %>% 
+html_children()
+```
+## Question 17 
+using google chrome to identify the necessary tags and pull the data on it
+```{r}
+rank <- hot100exam %>%
+rvest::html_nodes('body') %>%
+xml2::xml_find_all("//span[contains(@class,
+'chart-element__rank__number')]") %>%
+rvest::html_text()
+
+artist <- hot100exam %>%
+rvest::html_nodes('body') %>%
+xml2::xml_find_all("//span[contains(@class,
+'chart-element__information__artist')]") %>%
+rvest::html_text()
+
+title <- hot100exam %>%
+rvest::html_nodes('body') %>%
+xml2::xml_find_all("//span[contains(@class,
+'chart-element__information__song')]") %>%
+rvest::html_text()
+
+lastweek <- hot100exam %>% 
+  rvest::html_nodes('body') %>% 
+  xml2::xml_find_all("//span[contains(@class, 'chart-element__information__delta__text text--last')]") %>% 
+rvest::html_text()
+```
+
+## Last Question
+
+[Link to GitHub Repo](https://github.com/RolongAlong/exam3.git)
